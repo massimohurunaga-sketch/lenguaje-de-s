@@ -6,7 +6,7 @@ import cv2
 import os, sys
 import traceback
 import pyttsx3
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 from cvzone.HandTrackingModule import HandDetector
 from string import ascii_uppercase
 import enchant
@@ -28,6 +28,11 @@ class Application:
 
     def __init__(self):
         self.vs = cv2.VideoCapture(0)
+        # Configurar cámara para mejor calidad y rendimiento
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.vs.set(cv2.CAP_PROP_FPS, 30)
+        self.vs.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.current_image = None
         self.model = load_model('cnn8grps_rad1_model.h5')
         self.speak_engine=pyttsx3.init()
@@ -53,7 +58,7 @@ class Application:
 
 
         self.root = tk.Tk()
-        self.root.title("Sign Language To Text Conversion")
+        self.root.title("Jutsu no Traductor de IA")
         self.root.protocol('WM_DELETE_WINDOW', self.destructor)
         self.root.geometry("1300x700")
 
@@ -65,7 +70,7 @@ class Application:
 
         self.T = tk.Label(self.root)
         self.T.place(x=60, y=5)
-        self.T.config(text="Sign Language To Text Conversion", font=("Courier", 30, "bold"))
+        self.T.config(text="Jutsu no Traductor de IA", font=("Courier", 30, "bold"))
 
         self.panel3 = tk.Label(self.root)  # Current Symbol
         self.panel3.place(x=280, y=585)
@@ -127,8 +132,17 @@ class Application:
     def video_loop(self):
         try:
             ok, frame = self.vs.read()
+            if not ok or frame is None:
+                print("No se pudo leer desde la cámara")
+                self.root.after(30, self.video_loop)
+                return
+                
+            # Aplicar filtros para mejor calidad de imagen
+            frame = cv2.bilateralFilter(frame, 9, 75, 75)  # Reduce ruido manteniendo bordes
+            frame = cv2.convertScaleAbs(frame, alpha=1.1, beta=10)  # Mejora contraste y brillo
+            
             cv2image = cv2.flip(frame, 1)
-            if cv2image.any:
+            if cv2image is not None and cv2image.size > 0:
                 hands = hd.findHands(cv2image, draw=False, flipType=True)
                 cv2image_copy=np.array(cv2image)
                 cv2image = cv2.cvtColor(cv2image, cv2.COLOR_BGR2RGB)
@@ -290,7 +304,7 @@ class Application:
         except Exception:
             print("==", traceback.format_exc())
         finally:
-            self.root.after(1, self.video_loop)
+            self.root.after(30, self.video_loop)  # Cambiado de 1ms a 30ms para mejor rendimiento
 
     def distance(self,x,y):
         return math.sqrt(((x[0] - y[0]) ** 2) + ((x[1] - y[1]) ** 2))
